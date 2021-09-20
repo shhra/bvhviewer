@@ -1,4 +1,5 @@
 import numpy as np
+from quaternions import *
 
 
 class Animation:
@@ -30,38 +31,29 @@ class Animation:
         # print(f"{joint.name} ----> {frame_data}")
         if joint.is_root():
             offset = frame_data[:, 0:3] + np.array(joint.offset)
-            rotation = self.calculate_rotation(frame_data[:, 3:], joint.channels[4:])
-            transform = np.dstack((rotation, np.zeros_like(offset)))
-            final = np.array([[0, 0, 0, 1]] * frame_data.shape[0]).reshape(-1, 1, 4)
-            transform = np.concatenate((transform, final), axis=1)
-            translation = np.zeros_like(transform)
-            translation[:, 0, 0] = 1
-            translation[:, 1, 1] = 1
-            translation[:, 2, 2] = 1
-            translation[:, 3, 3] = 1
-            translation[:, 0:3, 3] = offset
-            # final = np.matmul(transform, translation)
-            final = np.matmul(translation, transform)
-            self.local_transforms[:, joint_idx, :, :] = final
-            # print(final)
+            rotation = self.calculate_rotation_quat(frame_data[:, 3:], joint.channels[4:])
+            # rotation = self.calculate_rotation(frame_data[:, 3:], joint.channels[4:])
         else:
             offset = np.zeros((frame_data.shape[0], 3)) + np.array(joint.offset)
-            rotation = self.calculate_rotation(frame_data, joint.channels[1:])
-            transform = np.dstack((rotation, np.zeros_like(offset)))
-            final = np.array([[0, 0, 0, 1]] * frame_data.shape[0]).reshape(-1, 1, 4)
-            transform = np.concatenate((transform, final), axis=1)
-            translation = np.zeros_like(transform)
-            translation[:, 0, 0] = 1
-            translation[:, 1, 1] = 1
-            translation[:, 2, 2] = 1
-            translation[:, 3, 3] = 1
-            translation[:, 0:3, 3] = offset
-            # final = np.matmul(transform, translation)
-            final = np.matmul(translation, transform)
-            parent_transform = self.local_transforms[:, joint.parent, :, :]
-            self.local_transforms[:, joint_idx, :, :] = np.matmul(
-                parent_transform, final
-            )
+            rotation = self.calculate_rotation_quat(frame_data, joint.channels[1:])
+            # rotation = self.calculate_rotation(frame_data, joint.channels[1:])
+        transform = np.dstack((rotation, np.zeros_like(offset)))
+        final = np.array([[0, 0, 0, 1]] * frame_data.shape[0]).reshape(-1, 1, 4)
+        transform = np.concatenate((transform, final), axis=1)
+        translation = np.zeros_like(transform)
+        translation[:, 0, 0] = 1
+        translation[:, 1, 1] = 1
+        translation[:, 2, 2] = 1
+        translation[:, 3, 3] = 1
+        translation[:, 0:3, 3] = offset
+        final = np.matmul(translation, transform)
+        if joint.is_root():
+            self.local_transforms[:, joint_idx, :, :] = final
+            return
+        parent_transform = self.local_transforms[:, joint.parent, :, :]
+        self.local_transforms[:, joint_idx, :, :] = np.matmul(
+            parent_transform, final
+        )
 
     def calculate_rotation(self, rotation, channel):
         rot = np.zeros((rotation.shape[0], 3, 3))
@@ -116,5 +108,28 @@ class Animation:
             rot = np.matmul(z_rotation, np.matmul(x_rotation, y_rotation))
         else:
             rot = np.matmul(x_rotation, np.matmul(y_rotation, z_rotation))
+        print("From euler")
+        print(rot[0:2, :, :])
+        # print(rot.shape)
+        return rot
+
+
+    def calculate_rotation_quat(self, rotation, channel):
+        if channel == "ZYX":
+            z_theta = rotation[:, 0] * np.pi / 180.0
+            y_theta = rotation[:, 1] * np.pi / 180.0
+            x_theta = rotation[:, 2] * np.pi / 180.0
+        elif channel == "ZXY":
+            z_theta = rotation[:, 0] * np.pi / 180.0
+            x_theta = rotation[:, 1] * np.pi / 180.0
+            y_theta = rotation[:, 2] * np.pi / 180.0
+        else:  # XYZ
+            x_theta = rotation[:, 0] * np.pi / 180.0
+            y_theta = rotation[:, 1] * np.pi / 180.0
+            z_theta = rotation[:, 2] * np.pi / 180.0
+
+        array = np.array([z_theta, y_theta, x_theta])
+        quat = euler2quat(array.T)
+        rot = quat2mat(quat)
         # print(rot.shape)
         return rot

@@ -2,8 +2,7 @@ import numpy as np
 
 
 def euler2quat(angle):
-    """Requires angle in order of Y, Z, and X
-    src: https://www.euclideanspace.com/maths/geometry/rotations/conversions/quaternionToEuler/index.htm
+    """Requires angle in order of Z, Y, X
     """
     yaw = angle[:, 0]
     pitch = angle[:, 1]
@@ -28,25 +27,25 @@ def quat2euler(quat):
     w, x, y, z = quat
     test = x * y + z * w
     if test > 0.499:  # singularity at north pole
-        heading = 2 * np.arctan2(x, w)
-        alttitude = np.pi / 2
-        bank = 0
-        return
+        yaw = 2 * np.arctan2(x, w)
+        pitch = np.pi / 2
+        roll = 0
+        return np.array([roll, yaw, pitch]) * 180 / np.pi
 
     if test < -0.499:  # singularity at south pole
-        heading = -2 * np.arctan2(x, w)
-        alttitude = -np.pi / 2
-        bank = 0
-        return
+        yaw = -2 * np.arctan2(x, w)
+        pitch = -np.pi / 2
+        roll = 0
+        return np.array([roll, yaw, pitch]) * 180 / np.pi
 
     sqx = x * x
     sqy = y * y
     sqz = z * z
-    heading = np.arctan2(2 * y * w - 2 * x * z, 1 - 2 * sqy - 2 * sqz)
-    alttitude = np.arcsin(2 * test)
-    bank = np.arctan2(2 * x * w - 2 * y * z, 1 - 2 * sqx - 2 * sqz)
+    yaw = np.arctan2(2 * y * w - 2 * x * z, 1 - 2 * sqy - 2 * sqz)
+    pitch = np.arcsin(2 * test)
+    roll = np.arctan2(2 * x * w - 2 * y * z, 1 - 2 * sqx - 2 * sqz)
 
-    return np.array([bank, heading, alttitude]) * 180 / np.pi
+    return np.array([roll, yaw, pitch]) * 180 / np.pi
 
 
 def quat2mat(quat):
@@ -74,6 +73,19 @@ def quat2mat(quat):
 
     return rot
 
+def angleaxis(quat):
+    qw = quat[:, 0]
+    qx = quat[:, 1]
+    qy = quat[:, 2]
+    qz = quat[:, 3]
+    mag = np.sqrt(qw ** 2 + qx ** 2 + qy ** 2 + qz ** 2)
+    angle = 2 * np.arccos(qw / mag)
+    sin_factor = np.sqrt(1.0 - (qw / mag) ** 2)
+    sin_factor[sin_factor == 0] = 1e-4
+    axis = np.array([qx, qy, qz]) / sin_factor
+    return angle.T, axis.T
+
+
 
 if __name__ == "__main__":
     a1 = np.array([[90.0, 0, 0], [0, 90.0, 0], [0, 0, 90.0], [45.0, 90.0, 0]])
@@ -86,3 +98,7 @@ if __name__ == "__main__":
 
     eul = quat2euler(np.array([0.7071068, 0, 0.7071068, 0.0]))
     print(eul)
+
+    angle_axis = angleaxis(quat)
+    print("Angle axis:\n")
+    print(angle_axis)
